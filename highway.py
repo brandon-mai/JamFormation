@@ -38,12 +38,9 @@ class Highway:
         for i in range(number_of_vehicles):
             self.state[2*i] = i * (1 / density)  # position
             perturbation = 0.1 * (np.random.random() - 0.5)
-            self.state[2*i + 1] = vf_max * (0.8)
+            self.state[2*i + 1] = vf_max * (0.8) # initial velocity
         
-        # Highway sections: (type, start_pos, end_pos, speed_limit)
-        self.sections: List[Tuple[str, float, float, float]] = [
-            ('normal', 0, self.road_length, vf_max)
-        ]
+        self.slowdowns = []
     
     def fresh_copy(self):
         """Create a fresh copy of the highway object."""
@@ -59,27 +56,33 @@ class Highway:
         new_highway.sections = self.sections.copy()
         return new_highway
 
-    def set_sections(self, sections: List[Tuple[str, float, float, float]]):
+    def set_slowdowns(self, slowdowns: List[Tuple[float, float, float]]):
         """
-        Set the highway sections configuration.
+        Set the highway slowdown sections.
         
         Args:
-            sections: List of (section_type, start_position, end_position, speed_limit)
+            sections: List of (start_pos, end_pos, speed_limit) tuples, 
+                      where 0.0 <= start_pos < end_pos <= 1.0
+                      and speed_limit is the maximum speed in that section.
         """
-        self.sections = sections
+        for slowdown in slowdowns:
+            start_pos, end_pos, speed_limit = slowdown
+            if not (0.0 <= start_pos < end_pos <= 1.0):
+                raise ValueError("Positions must be in the range [0.0, 1.0) and start_pos < end_pos")
+            if speed_limit <= 0:
+                raise ValueError("Speed limit must be positive")
+        self.slowdowns = slowdowns
 
 
     def get_speed_limits(self) -> np.ndarray:
         """Get speed limits for each vehicle based on their current section."""
         positions = self.get_positions()
-        speed_limits = np.zeros(self.number_of_vehicles)
+        speed_limits = np.full(self.number_of_vehicles, self.vf_max, dtype=float)
         
         for i in range(self.number_of_vehicles):
-            pos = positions[i] % self.road_length
-            speed_limits[i] = self.vf_max
-            
-            for section_type, start_pos, end_pos, speed_limit in self.sections:
-                if start_pos <= pos < end_pos:
+            pos_norm = positions[i] / self.road_length # position normalized to [0, 1)
+            for start_pos, end_pos, speed_limit in self.slowdowns:
+                if start_pos <= pos_norm < end_pos:
                     speed_limits[i] = speed_limit
                     break
         
@@ -100,27 +103,19 @@ class Highway:
         """Calculate headways (distance to vehicle in front) for all vehicles."""
         positions = self.get_positions()
         headways = np.roll(positions, -1) - positions
-
-        for i in range(len(headways)):
-            if headways[i] <= 0:
-                headways[i] += self.road_length
+        headways = np.where(headways < 0, self.road_length + headways, headways)
 
         return headways
     
 
-    def get_optimal_velocities(
-            self,
-            headways_array: np.ndarray = None,
-            speed_limits_array: np.ndarray = None,
-            xf_c: float = None
-            ) -> np.ndarray:
+    def get_optimal_velocities(self) -> np.ndarray:
         """Calculate optimal velocities for all vehicles based on headway and section properties.
         Returns:
             Array of optimal velocities for each vehicle.
         """
-        headways = headways_array if headways_array is not None else self.get_headways()
-        speed_limits = speed_limits_array if speed_limits_array is not None else self.get_speed_limits()
-        xf_c = xf_c if xf_c is not None else self.xf_c
+        headways = self.get_headways()
+        speed_limits = self.get_speed_limits()
+        xf_c = 2.0
         velocities = np.zeros(headways.size, dtype=float)
         
         for i in range(headways.size):
@@ -185,27 +180,19 @@ class Highway:
         self.current_time += h
     
 
-    def simulate_till_steady_state(self, max_iterations: int = 100000, tolerance: float = 1e-2):
+    def simulate_till_steady_state(self, max_iterations: int = 50000, tolerance: float = 1e-4):
         """Run the simulation until steady state is reached or max iterations."""
-        velocity_history = []
         check_interval = 100  # Check every 100 steps
         
         for step in trange(max_iterations):
             self.rk4_step()
             
             if step % check_interval == 0:
-                current_velocities = self.get_velocities()
-                velocity_history.append(current_velocities[0])
-                
-                # Check for steady state using velocity changes over longer time
-                if len(velocity_history) >= 10:  # Check last 10 recordings
-                    recent_velocities = np.array(velocity_history[-10:])
-                    velocity_std = np.std(recent_velocities, axis=0)
-                    max_std = np.max(velocity_std)
-                    
-                    if max_std < tolerance:
-                        print(f"Steady state reached at iteration {step}")
-                        break
-                        
-                    # Keep only recent history to save memory
-                    velocity_history = velocity_history[-10:]
+                # STEADY MOTHER FUCKING STATE CHECK
+                if np.allclose(self.get_velocities(), self.get_optimal_velocities(), atol=tolerance):
+                    print(f"Steady state reached at step {step}.")
+                    break
+
+
+if __name__ == "__main__":
+    print("puriketsu")
