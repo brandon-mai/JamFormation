@@ -53,7 +53,7 @@ class Highway:
             xf_c=self.xf_c,
             xs_c=self.xs_c
         )
-        new_highway.sections = self.sections.copy()
+        new_highway.slowdowns = self.slowdowns.copy()
         return new_highway
 
     def set_slowdowns(self, slowdowns: List[Tuple[float, float, float]]):
@@ -122,9 +122,6 @@ class Highway:
             speed_limit = speed_limits[i]
             tanh_arg1 = headways[i] - xf_c
             tanh_arg2 = xf_c
-            if speed_limit < self.vf_max:
-                tanh_arg1 = self.sensitivity * tanh_arg1
-                tanh_arg2 = self.sensitivity * tanh_arg2
             
             velocities[i] = speed_limit / 2 * (math.tanh(tanh_arg1) + math.tanh(tanh_arg2))
         
@@ -183,7 +180,7 @@ class Highway:
         self.current_time += h
     
 
-    def simulate_till_steady_state(self, max_iterations: int = 50000, tolerance: float = 1e-3):
+    def simulate_till_steady_state(self, max_iterations: int = 20000, tolerance: float = 1e-3):
         """Run the simulation until steady state is reached or max iterations."""
         check_interval = 100  # Check every 100 steps
         
