@@ -9,7 +9,7 @@ class Highway:
     """
     
     def __init__(self, density: float, number_of_vehicles: int, 
-                 sensitivity: float = 2.5, vf_max: float = 2.0,
+                 sensitivity: float = 2.4, vf_max: float = 2.0,
                  time_step: float = 1/128, xf_c: float = 2.0, xs_c: float = 2.0):
         """
         Initialize the highway simulation.
@@ -38,7 +38,7 @@ class Highway:
         for i in range(number_of_vehicles):
             self.state[2*i] = i * (1 / density)  # position
             perturbation = 0.1 * (np.random.random() - 0.5)
-            self.state[2*i + 1] = vf_max * (0.8) # initial velocity
+            self.state[2*i + 1] = vf_max * (0.8 + perturbation) # initial velocity
         
         self.slowdowns = []
     
@@ -180,7 +180,7 @@ class Highway:
         self.current_time += h
     
 
-    def simulate_till_steady_state(self, max_iterations: int = 20000, tolerance: float = 1e-3):
+    def simulate_till_steady_state(self, max_iterations: int = 50000, tolerance: float = 1e-3):
         """Run the simulation until steady state is reached or max iterations."""
         check_interval = 100  # Check every 100 steps
         
